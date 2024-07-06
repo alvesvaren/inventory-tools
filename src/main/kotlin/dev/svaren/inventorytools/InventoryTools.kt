@@ -5,10 +5,11 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents
 import net.minecraft.client.MinecraftClient
 import net.minecraft.client.gui.screen.ingame.HandledScreen
 import net.minecraft.client.util.InputUtil
+import net.minecraft.entity.player.PlayerInventory
 import net.minecraft.item.Item
 import net.minecraft.item.ItemStack
-import net.minecraft.item.Items
-import net.minecraft.screen.GenericContainerScreenHandler
+import net.minecraft.screen.ScreenHandler
+import net.minecraft.screen.ScreenHandlerListener
 import net.minecraft.screen.slot.Slot
 import net.minecraft.screen.slot.SlotActionType
 import org.lwjgl.glfw.GLFW
@@ -18,9 +19,8 @@ import kotlin.math.min
 
 val orderer = Orderer()
 
-
-private fun combineStacks(screen: HandledScreen<GenericContainerScreenHandler>) {
-    val slots = screen.screenHandler.slots.filter { it.inventory === screen.screenHandler.inventory }
+private fun combineStacks(screen: HandledScreen<*>) {
+    val slots = screen.screenHandler.slots.filter { it.inventory !is PlayerInventory }
 
     for (i in slots.indices) {
         val slot = slots[i]
@@ -39,7 +39,7 @@ private fun canCombine(stack1: ItemStack, stack2: ItemStack): Boolean {
     return stack1.item == stack2.item && stack1.count + stack2.count <= stack1.maxCount
 }
 
-private fun mergeStacks(screen: HandledScreen<GenericContainerScreenHandler>, sourceSlot: Slot, targetSlot: Slot) {
+private fun mergeStacks(screen: HandledScreen<*>, sourceSlot: Slot, targetSlot: Slot) {
     val sourceStack = sourceSlot.stack
     val targetStack = targetSlot.stack
 
@@ -50,10 +50,17 @@ private fun mergeStacks(screen: HandledScreen<GenericContainerScreenHandler>, so
         simulateSlotClick(screen, sourceSlot.id, 0, SlotActionType.PICKUP)
         simulateSlotClick(screen, targetSlot.id, 0, SlotActionType.PICKUP)
     }
+
+    if (!screen.screenHandler.cursorStack.isEmpty) {
+        val firstEmptySlot = screen.screenHandler.slots.firstOrNull { it.stack.isEmpty }
+        if (firstEmptySlot != null) {
+            simulateSlotClick(screen, firstEmptySlot.id, 0, SlotActionType.PICKUP)
+        }
+    }
 }
 
 private fun simulateSlotClick(
-    screen: HandledScreen<GenericContainerScreenHandler>, slotId: Int, mouseButton: Int, actionType: SlotActionType
+    screen: HandledScreen<*>, slotId: Int, mouseButton: Int, actionType: SlotActionType
 ) {
     val client = MinecraftClient.getInstance()
     val interactionManager = client.interactionManager
@@ -63,8 +70,8 @@ private fun simulateSlotClick(
     }
 }
 
-private fun sortInventory(screen: HandledScreen<GenericContainerScreenHandler>) {
-    val slots = screen.screenHandler.slots.filter { it.inventory === screen.screenHandler.inventory }
+private fun sortInventory(screen: HandledScreen<*>) {
+    val slots = screen.screenHandler.slots.filter { it.inventory !is PlayerInventory }
     val totalCount: Map<Item, Int> = slots.map { it.stack.item }.associateWith { item ->
         slots.filter { it.stack.item == item }.sumOf { it.stack.count }
     }
@@ -79,13 +86,18 @@ private fun sortInventory(screen: HandledScreen<GenericContainerScreenHandler>) 
         // Air is always last
         if (slot1.stack.isEmpty) {
             return true
-        } else {
-            if (slot2.stack.isEmpty) {
-                return false
-            }
+        } else if (slot2.stack.isEmpty) {
+            return false
         }
 
-        if (controlDown) {
+        // If the items are the same, emptier slots should come last
+        if (slot1.stack.item == slot2.stack.item) {
+            println("slot1: ${slot1.stack.item}, ${slot1.stack.count}")
+            println("slot2: ${slot2.stack.item}, ${slot2.stack.count}")
+            return slot1.stack.count < slot2.stack.count
+        }
+
+        if (controlDown && shiftDown) {
             return Math.random() < 0.5
         }
 
@@ -117,11 +129,13 @@ private fun sortInventory(screen: HandledScreen<GenericContainerScreenHandler>) 
 }
 
 
-private fun moveStack(screen: HandledScreen<GenericContainerScreenHandler>, slot1: Slot, slot2: Slot) {
+private fun moveStack(screen: HandledScreen<*>, slot1: Slot, slot2: Slot) {
+    val highestCountSlot = if (slot1.stack.count > slot2.stack.count) slot1 else slot2
+    val lowestCountSlot = if (slot1.stack.count > slot2.stack.count) slot2 else slot1
     if (slot1.id != slot2.id) {
-        simulateSlotClick(screen, slot1.id, 0, SlotActionType.PICKUP)
-        simulateSlotClick(screen, slot2.id, 0, SlotActionType.PICKUP)
-        simulateSlotClick(screen, slot1.id, 0, SlotActionType.PICKUP)
+        simulateSlotClick(screen, highestCountSlot.id, 0, SlotActionType.PICKUP)
+        simulateSlotClick(screen, lowestCountSlot.id, 0, SlotActionType.PICKUP)
+        simulateSlotClick(screen, highestCountSlot.id, 0, SlotActionType.PICKUP)
     }
 }
 
@@ -154,12 +168,11 @@ class InventoryTools : ModInitializer {
     }
 
     private fun handleMiddleClick() {
-        val currentScreen = MinecraftClient.getInstance().currentScreen
+        val currentScreen = MinecraftClient.getInstance().currentScreen;
+
         if (currentScreen is HandledScreen<*>) {
-            if (currentScreen.screenHandler is GenericContainerScreenHandler) {
-                combineStacks(currentScreen as HandledScreen<GenericContainerScreenHandler>)
-                sortInventory(currentScreen)
-            }
+            combineStacks(currentScreen)
+            sortInventory(currentScreen)
         }
     }
 }

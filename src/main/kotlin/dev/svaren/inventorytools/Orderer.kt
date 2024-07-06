@@ -8,7 +8,6 @@ class Orderer {
 
     // Get creative inventory order of an item
     public fun getCreativeOrder(item: Item): Int {
-        println("Orderer.getOrder($item): ${itemOrderMap[item]}")
         return itemOrderMap[item] ?: Int.MAX_VALUE
     }
 
