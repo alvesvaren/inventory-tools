@@ -8,8 +8,6 @@ import net.minecraft.client.util.InputUtil
 import net.minecraft.entity.player.PlayerInventory
 import net.minecraft.item.Item
 import net.minecraft.item.ItemStack
-import net.minecraft.screen.ScreenHandler
-import net.minecraft.screen.ScreenHandlerListener
 import net.minecraft.screen.slot.Slot
 import net.minecraft.screen.slot.SlotActionType
 import org.lwjgl.glfw.GLFW
@@ -92,8 +90,6 @@ private fun sortInventory(screen: HandledScreen<*>) {
 
         // If the items are the same, emptier slots should come last
         if (slot1.stack.item == slot2.stack.item) {
-            println("slot1: ${slot1.stack.item}, ${slot1.stack.count}")
-            println("slot2: ${slot2.stack.item}, ${slot2.stack.count}")
             return slot1.stack.count < slot2.stack.count
         }
 
